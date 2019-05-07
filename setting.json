@@ -1,0 +1,5 @@
+{
+	"lineParser":{
+		"format" : ["Date", "Time", "PID", "IGNORE", "Level", "name", "message"]
+	}
+}
