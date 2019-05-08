@@ -6,15 +6,28 @@ import json
 #日志扫描器，生成ResolvedInfo
 class LogScanner:
 	def scan(self, logFilePath, lineParser):
+		ctx = LogContext()
+
 		with open(logFilePath) as f:
+
 			linesArr = f.read().splitlines()
 
 			print("total lines:" + str(len(linesArr)))
 
+			lnDataList = []
+
 			for lnStr in linesArr:
 				#print("start parse:" + lnStr)
 				lnData = lineParser.parse(lnStr)
-				self.printLineData(lnData)
+				#self.printLineData(lnData)
+				lnDataList.append(lnData)
+
+			ctx.setLines(lnDataList)
+
+		return ctx
+
+
+
 	def printLineData(self, lnData):
 		if ("Message" in lnData):
 			print(lnData["Message"])
@@ -26,7 +39,7 @@ class ReadToEndReader:
 		if (start >= lenOfStr):
 			return None, 0
 
-		toIdx = lenOfStr - 1
+		toIdx = lenOfStr
 		return lnStr[start:toIdx], toIdx
 
 class StringReader:
@@ -38,14 +51,11 @@ class StringReader:
 
 		idx = start
 
-		#("start char:"+lnStr[start])
-
 		hasBegin = False
 		startIdx = -1
 
 		result = None
 		while (idx < lenOfStr):
-			#print("idx:" + str(idx))
 
 			if (not hasBegin):
 				if (lnStr[idx] != ' '):
@@ -98,27 +108,40 @@ class LineParser:
 
 # 解析后的crash信息
 class LogContext:
-	def test():
+	def setLines(self, lines):
+		self.lines = lines
+
+class BaseKnowledge:
+	def apply(self, logContext):
 		pass
 
-class Rule:
-	def get():
-		pass
+class Tip:
+	def __init__(self, line, msg):
+		self.line = line
+		self.msg = msg
 
 class Reporter:
 	def report_to(path):
 		pass
 
+
+# knowledge impl #
+class TooManyFileOpenKnowledge(BaseKnowledge):
+	def apply(self, logContext):
+		for ln in logContext.lines:
+			if ("Message" in ln):
+				print(ln["Message"])
+				if (ln["Message"].find("java.io.IOException: Too many open files") >= 0):
+					tip = Tip(ln, "文件句柄耗尽导致crash")
+					return tip
+
+		return None
+
+
+#end impl
+
 if __name__=="__main__":
 	print("===== crash analyze tool =====")
-
-
-	# test = "05-01 00:15:48.162   625   646 E NetlinkEvent: NetlinkEvent::FindParam(): Parameter 'TIME_NS' not found"
-	# rdr = StringReader()
-	# data, idx = rdr.read(test, 25)
-	# print("data:" + data)
-
-
 
 	#for test
 	logFilePath = "examples/test.log"
@@ -126,7 +149,15 @@ if __name__=="__main__":
 	scanner = LogScanner()
 	lineParser = LineParser()
 
-	scanner.scan(logFilePath, lineParser)
+	ctx = scanner.scan(logFilePath, lineParser)
+
+	print("===== report =====")
+	knowledge1 = TooManyFileOpenKnowledge()
+	tip = knowledge1.apply(ctx)
+	if (tip):
+		print tip.msg
+
+
 
 
 	

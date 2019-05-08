@@ -1,1 +1,1 @@
-05-02 16:19:55.568 32158 32209 I UndealCount.QZoneUnreadServletLogic: recv Qzone Unread Push: Feed实时更新未读
+05-02 16:18:06.272 14656 14713 W System.err: java.io.IOException: Too many open files
