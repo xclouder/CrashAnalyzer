@@ -16,9 +16,12 @@ class LogScanner:
 
 			lnDataList = []
 
+			lnNum = 0
 			for lnStr in linesArr:
+				lnNum = lnNum + 1
 				#print("start parse:" + lnStr)
 				lnData = lineParser.parse(lnStr)
+				lnData["Line"] = lnNum
 				#self.printLineData(lnData)
 				lnDataList.append(lnData)
 
@@ -116,9 +119,16 @@ class BaseKnowledge:
 		pass
 
 class Tip:
-	def __init__(self, line, msg):
-		self.line = line
+	def __init__(self, msg):
 		self.msg = msg
+		self.lines = []
+		self.infos = []
+
+	def addInfo(self, infoMsg):
+		self.infos.append(infoMsg)
+
+	def addRelatedLog(self, line):
+		self.lines.append(line)
 
 class Reporter:
 	def report_to(path):
@@ -126,24 +136,79 @@ class Reporter:
 
 
 # knowledge impl #
-class TooManyFileOpenKnowledge(BaseKnowledge):
+class BaseInfoKnowledge(BaseKnowledge):
 	def apply(self, logContext):
+		totalLines = len(logContext.lines)
+		foundCrash = False
+		tip = Tip("基础信息")
+		tip.addInfo("日志总行数：" + str(totalLines))
+
 		for ln in logContext.lines:
 			if ("Message" in ln):
-				print(ln["Message"])
-				if (ln["Message"].find("java.io.IOException: Too many open files") >= 0):
-					tip = Tip(ln, "文件句柄耗尽导致crash")
-					return tip
+				msg = ln["Message"]
+				if (msg.find("exited due to signal") >= 0 or
+					msg.find("app died") >= 0):
+					foundCrash = True
+					tip.addRelatedLog(ln)
 
-		return None
+
+
+		if (foundCrash):
+			tip.addInfo("发现crash")
+
+		return tip
+
+class TooManyFileOpenKnowledge(BaseKnowledge):
+	def apply(self, logContext):
+
+		tip = None
+		for ln in logContext.lines:
+			if ("Message" in ln):
+				#print(ln["Message"])
+				if (ln["Message"].find("java.io.IOException: Too many open files") >= 0):
+					if (tip == None):
+						tip = Tip("文件句柄耗尽导致crash")
+
+					tip.addRelatedLog(ln)
+
+		return tip
 
 
 #end impl
+
+def showTip(index, tip):
+	print(str(index) + ". " + tip.msg)
+
+	if (tip.infos):
+		for info in tip.infos:
+			print(info)
+
+	if (tip.lines):
+		print ""
+		print "相关日志："
+
+		logLines = len(tip.lines)
+		showLines = logLines
+		hasMoreLog = False
+		if (logLines > 10):
+			showLines = 10
+			hasMoreLog = True
+
+		for lnNum in range(0, showLines):
+			ln = tip.lines[lnNum]
+			print("Line " + str(ln["Line"]) + ",\t" + ln["Message"])
+
+		if (hasMoreLog):
+			print("... has more " + str(logLines - 10) + " logs")
+
+		print ""
+
 
 if __name__=="__main__":
 	print("===== crash analyze tool =====")
 
 	#for test
+	#logFilePath = "examples/crash-yafei.log"
 	logFilePath = "examples/test.log"
 
 	scanner = LogScanner()
@@ -151,13 +216,30 @@ if __name__=="__main__":
 
 	ctx = scanner.scan(logFilePath, lineParser)
 
-	print("===== report =====")
-	knowledge1 = TooManyFileOpenKnowledge()
-	tip = knowledge1.apply(ctx)
-	if (tip):
-		print tip.msg
 
+	#knowledge database
+	knowledgeDb = [
+		BaseInfoKnowledge(),
+		TooManyFileOpenKnowledge()
+	]
 
+	#tips container
+	tips = []
 
+	print "start analyze..."
+	for kn in knowledgeDb:
+		t = kn.apply(ctx)
+		if (t):
+			tips.append(t)
 
-	
+	print "analyze finished."
+	print("===== report =====")	
+	if (len(tips) > 0):
+		index = 0
+		for tip in tips:
+			index = index + 1
+			showTip(index, tip)
+
+	else:
+		print "没有找到线索"
+
