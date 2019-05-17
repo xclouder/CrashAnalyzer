@@ -130,6 +130,9 @@ class Tip:
 	def addRelatedLog(self, line):
 		self.lines.append(line)
 
+	def showAllLogs(self):
+		return False
+
 class Reporter:
 	def report_to(path):
 		pass
@@ -173,6 +176,36 @@ class TooManyFileOpenKnowledge(BaseKnowledge):
 
 		return tip
 
+class BacktraceExtractKnowledge(BaseKnowledge):
+	def apply(self, logContext):
+		tip = None
+
+		lnNum = 0
+		backtraceBegin = False
+		for ln in logContext.lines:
+			if ("Message" in ln):
+				#print(ln["Message"])
+				if (ln["Message"].find("backtrace") >= 0):
+					
+					if (tip == None):
+						tip = Tip("有堆栈信息")
+
+					backtraceBegin = True
+					tip.addRelatedLog(ln)
+
+					continue
+
+				if backtraceBegin:
+					if (ln["Message"].find("#") >= 0):
+						tip.addRelatedLog(ln)
+					else:
+						backtraceBegin = False
+
+		return tip
+
+	def showAllLogs(self):
+		return True
+
 
 #end impl
 
@@ -189,17 +222,27 @@ def showTip(index, tip):
 
 		logLines = len(tip.lines)
 		showLines = logLines
-		hasMoreLog = False
-		if (logLines > 10):
-			showLines = 10
-			hasMoreLog = True
 
-		for lnNum in range(0, showLines):
-			ln = tip.lines[lnNum]
-			print("Line " + str(ln["Line"]) + ",\t" + ln["Message"])
+		print "show all lines:" + str(tip.showAllLogs())
 
-		if (hasMoreLog):
-			print("... has more " + str(logLines - 10) + " logs")
+		if tip.showAllLogs():
+			for lnNum in range(0, showLines):
+				ln = tip.lines[lnNum]
+				print("Line " + str(ln["Line"]) + ",\t" + ln["Message"])
+
+		else:
+			hasMoreLog = False
+
+			if (logLines > 10):
+				showLines = 10
+				hasMoreLog = True
+
+			for lnNum in range(0, showLines):
+				ln = tip.lines[lnNum]
+				print("Line " + str(ln["Line"]) + ",\t" + ln["Message"])
+
+			if (hasMoreLog):
+				print("... has more " + str(logLines - 10) + " logs")
 
 		print ""
 
@@ -208,8 +251,8 @@ if __name__=="__main__":
 	print("===== crash analyze tool =====")
 
 	#for test
-	#logFilePath = "examples/crash-yafei.log"
-	logFilePath = "examples/test.log"
+	logFilePath = "examples/R11.log"
+	#logFilePath = "examples/test.log"
 
 	scanner = LogScanner()
 	lineParser = LineParser()
@@ -220,7 +263,8 @@ if __name__=="__main__":
 	#knowledge database
 	knowledgeDb = [
 		BaseInfoKnowledge(),
-		TooManyFileOpenKnowledge()
+		TooManyFileOpenKnowledge(),
+		BacktraceExtractKnowledge()
 	]
 
 	#tips container
