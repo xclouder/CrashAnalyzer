@@ -291,7 +291,16 @@ class BacktraceExtractKnowledge(BaseKnowledge):
 				else:
 					break
 
-			return StackLine("other", lnData["Address"], lnData["Content"])
+			typ = "other"
+			content = lnData["Content"]
+			if (content.find("libunity.so") >= 0):
+				typ = "libunity"
+			elif (content.find("il2cpp.so") >= 0):
+				typ = "il2cpp"
+			elif (content.find("libc.so") >= 0):
+				typ = "libc"
+
+			return StackLine(typ, lnData["Address"], content)
 		else:
 			return None
 		
