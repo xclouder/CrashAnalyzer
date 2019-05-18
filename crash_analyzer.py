@@ -111,8 +111,14 @@ class LineParser:
 
 # 解析后的crash信息
 class LogContext:
+	def __init__(self):
+		self.backtraces = []
+
 	def setLines(self, lines):
 		self.lines = lines
+
+	def addBackTrace(self, backtrace):
+		self.backtraces.append(backtrace)
 
 class BaseKnowledge:
 	def apply(self, logContext):
@@ -202,22 +208,52 @@ class TooManyFileOpenKnowledge(BaseKnowledge):
 
 		return tip
 
+class StackLine:
+	def __init__(self, typ, addr, content):
+		self.type = typ
+		self.content = content
+		self.address = addr
+
+class BackTrace:
+	def __init__(self):
+		self.stack = []
+
+	def addStackLine(self, stackLine):
+		self.stack.append(stackLine)
+
 class BacktraceExtractKnowledge(BaseKnowledge):
+
+	def __init__(self):
+		#stack parse formatter
+		strRdr = StringReader()
+		read2EndRdr = ReadToEndReader()
+		formatter = [("Index", strRdr),
+					("Register", strRdr),
+					("Address", strRdr),
+					("Content", read2EndRdr)
+					]
+		self.formatter = formatter
+
 	def apply(self, logContext):
 		tip = None
 
 		lnNum = 0
 		backtraceBegin = False
+
+		currBackTrace = None
+
 		for ln in logContext.lines:
 			if ("Message" in ln):
 				#print(ln["Message"])
-				if (ln["Message"].find("backtrace") >= 0):
+				if (ln["Message"].find("backtrace:") >= 0):
 					
 					if (tip == None):
 						tip = Tip("有堆栈信息")
 						tip.showAllLogs = True
 
 					backtraceBegin = True
+					currBackTrace = BackTrace()
+
 					tip.addRelatedLog(ln)
 
 					continue
@@ -225,11 +261,40 @@ class BacktraceExtractKnowledge(BaseKnowledge):
 				if backtraceBegin:
 					if (ln["Message"].find("#") >= 0):
 						tip.addRelatedLog(ln)
+
+						stackLine = self.parseStackLine(ln["Message"])
+						currBackTrace.addStackLine(stackLine)
+
 					else:
+						logContext.addBackTrace(currBackTrace)
+						currBackTrace = None
 						backtraceBegin = False
 
 		return tip
 
+	def parseStackLine(self, content):
+
+		index = content.find('#')
+		if (index >= 0):
+			lineStr = content[index:]
+
+			lnData = {}
+
+			cursor = 0
+			for name, rdr in self.formatter:
+				val, toIndex = rdr.read(lineStr, cursor)
+
+				if (val != None):
+					#print("name:" + name + ", val:" + val)
+					lnData[name] = val
+					cursor = toIndex + 1
+				else:
+					break
+
+			return StackLine("other", lnData["Address"], lnData["Content"])
+		else:
+			return None
+		
 
 #end impl
 
@@ -275,13 +340,17 @@ def showTip(index, tip):
 		for t in tip.tips:
 			print(t)
 
+def showBackTrace(bt):
+	print("this is a backtrace:")
+	for ln in bt.stack:
+		print("type:" + ln.type + ", addr:" + ln.address + " " + ln.content)
 
 if __name__=="__main__":
 	print("===== crash analyze tool =====")
 
 	#for test
-	logFilePath = "examples/R11.log"
-	#logFilePath = "examples/test.log"
+	#logFilePath = "examples/R11.log"
+	logFilePath = "examples/test4.log"
 
 	scanner = LogScanner()
 	lineParser = LineParser()
@@ -312,6 +381,13 @@ if __name__=="__main__":
 		for tip in tips:
 			index = index + 1
 			showTip(index, tip)
+
+		#打印翻译后的堆栈
+		if (len(ctx.backtraces) > 0):
+			print "resymbol stack:"
+
+			for bt in ctx.backtraces:
+				showBackTrace(bt)
 
 	else:
 		print "没有找到线索"
