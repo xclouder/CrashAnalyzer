@@ -123,6 +123,8 @@ class Tip:
 		self.msg = msg
 		self.lines = []
 		self.infos = []
+		self.showAllLogs = False
+		self.tips = []
 
 	def addInfo(self, infoMsg):
 		self.infos.append(infoMsg)
@@ -130,8 +132,8 @@ class Tip:
 	def addRelatedLog(self, line):
 		self.lines.append(line)
 
-	def showAllLogs(self):
-		return False
+	def addTip(self, tipStr):
+		self.tips.append(tipStr)
 
 class Reporter:
 	def report_to(path):
@@ -154,12 +156,36 @@ class BaseInfoKnowledge(BaseKnowledge):
 					foundCrash = True
 					tip.addRelatedLog(ln)
 
-
-
 		if (foundCrash):
 			tip.addInfo("发现crash")
+			tip.addTip(self.getTips())
 
 		return tip
+
+	def getTips(self):
+		return '''signal含义：
+		SIGHUP 1 A 终端挂起或者控制进程终止 
+		SIGINT 2 A 键盘中断（如break键被按下） 
+		SIGQUIT 3 C 键盘的退出键被按下 
+		SIGILL 4 C 非法指令 
+		SIGABRT 6 C 由abort(3)发出的退出指令 
+		SIGFPE 8 C 浮点异常 
+		SIGKILL 9 AEF Kill信号 
+		SIGSEGV 11 C 无效的内存引用 
+		SIGPIPE 13 A 管道破裂: 写一个没有读端口的管道 
+		SIGALRM 14 A 由alarm(2)发出的信号 
+		SIGTERM 15 A 终止信号 
+		SIGUSR1 30,10,16 A 用户自定义信号1 
+		SIGUSR2 31,12,17 A 用户自定义信号2 
+		SIGCHLD 20,17,18 B 子进程结束信号 
+		SIGCONT 19,18,25 进程继续（曾被停止的进程） 
+		SIGSTOP 17,19,23 DEF 终止进程 
+		SIGTSTP 18,20,24 D 控制终端（tty）上按下停止键 
+		SIGTTIN 21,21,26 D 后台进程企图从控制终端读 
+		SIGTTOU 22,22,27 D 后台进程企图从控制终端写 
+		'''
+		
+
 
 class TooManyFileOpenKnowledge(BaseKnowledge):
 	def apply(self, logContext):
@@ -189,6 +215,7 @@ class BacktraceExtractKnowledge(BaseKnowledge):
 					
 					if (tip == None):
 						tip = Tip("有堆栈信息")
+						tip.showAllLogs = True
 
 					backtraceBegin = True
 					tip.addRelatedLog(ln)
@@ -202,9 +229,6 @@ class BacktraceExtractKnowledge(BaseKnowledge):
 						backtraceBegin = False
 
 		return tip
-
-	def showAllLogs(self):
-		return True
 
 
 #end impl
@@ -223,9 +247,9 @@ def showTip(index, tip):
 		logLines = len(tip.lines)
 		showLines = logLines
 
-		print "show all lines:" + str(tip.showAllLogs())
+		print "show all lines:" + str(tip.showAllLogs)
 
-		if tip.showAllLogs():
+		if tip.showAllLogs:
 			for lnNum in range(0, showLines):
 				ln = tip.lines[lnNum]
 				print("Line " + str(ln["Line"]) + ",\t" + ln["Message"])
@@ -245,6 +269,11 @@ def showTip(index, tip):
 				print("... has more " + str(logLines - 10) + " logs")
 
 		print ""
+
+	if (tip.tips):
+		print "提示:"
+		for t in tip.tips:
+			print(t)
 
 
 if __name__=="__main__":
